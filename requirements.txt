@@ -22,7 +22,7 @@ jsonlines==1.2.0
 kafka-python==1.4.3
 lazy-object-proxy==1.4.1
 locket==0.2.0
-Mako==1.0.12
+Mako==1.2.2
 Markdown==2.4.1
 MarkupSafe==1.1.1
 mccabe==0.6.1
