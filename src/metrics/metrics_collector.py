@@ -27,7 +27,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 
-from metrics.models import ResourceUtilization
+from .models import ResourceUtilization
 
 
 class MetricsCollector:
