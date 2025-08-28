@@ -26,3 +26,11 @@ out
 *.code-workspace
 dependencies.db
 **.iml
+
+# Frontend build artifacts
+frontend/build/
+frontend/node_modules/
+frontend/.env
+
+# Metrics data files
+metrics/runs/
