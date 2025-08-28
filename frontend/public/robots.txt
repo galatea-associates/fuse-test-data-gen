@@ -1,2 +1,16 @@
+# robots.txt for FUSE Performance Monitor
+# 
+# This configuration allows all web crawlers to access all content.
+# This is appropriate for publicly accessible performance dashboards.
+# 
+# For internal-only deployments, consider restricting access by adding:
+# User-agent: *
+# Disallow: /
+#
+# For more information about robots.txt: https://www.robotstxt.org/
+
 User-agent: *
 Allow: /
+
+# Optional: Specify sitemap location (uncomment if sitemap.xml exists)
+# Sitemap: https://your-domain.com/sitemap.xml
