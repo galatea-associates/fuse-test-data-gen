@@ -1,468 +1,712 @@
 /**
- * API Client Service for FUSE Test Data Generator Performance Monitoring
+ * Frontend API Client Service for FUSE Test Data Generator
  * 
- * Provides a centralized interface for all communication with the FastAPI backend.
- * Implements axios-based HTTP methods for fetching performance metrics, run histories,
- * and comparison data with comprehensive error handling, retry logic, and response transformation.
+ * Provides a centralized interface for all communication with the FastAPI backend,
+ * implementing comprehensive error handling, retry logic, caching, and response
+ * transformation for performance metrics and run data.
  * 
- * Features:
- * - Centralized axios configuration with base URL and CORS support
- * - Comprehensive error handling with user-friendly error messages
- * - Retry logic with exponential backoff for transient failures
- * - Request/response interceptors for logging and debugging
- * - Caching strategy for frequently accessed data
- * - Request cancellation support for long-running requests
- * - Response transformation to match frontend component expectations
+ * @author Blitzy Platform
+ * @version 1.0.0
  */
 
 import axios from 'axios';
 
-// Configuration constants
-const BASE_URL = 'http://localhost:8000';
-const DEFAULT_TIMEOUT = 10000; // 10 seconds
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
-const CACHE_TIMEOUT = 300000; // 5 minutes
+/**
+ * API Configuration Constants
+ */
+const API_CONFIG = {
+    BASE_URL: 'http://localhost:8000',
+    TIMEOUT: 10000,
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 1000,
+    CACHE_TTL: 5 * 60 * 1000, // 5 minutes
+};
 
 /**
- * Cache implementation for storing API responses
+ * API Error Types
  */
-class ApiCache {
+const API_ERRORS = {
+    NETWORK_ERROR: 'NETWORK_ERROR',
+    TIMEOUT: 'TIMEOUT',
+    SERVER_ERROR: 'SERVER_ERROR',
+    NOT_FOUND: 'NOT_FOUND',
+    INVALID_REQUEST: 'INVALID_REQUEST',
+    CANCELLED: 'CANCELLED',
+};
+
+/**
+ * In-memory cache for API responses
+ */
+class APICache {
     constructor() {
         this.cache = new Map();
-        this.timeouts = new Map();
+        this.timestamps = new Map();
     }
 
-    set(key, value, ttl = CACHE_TIMEOUT) {
-        // Clear existing timeout for this key
-        if (this.timeouts.has(key)) {
-            clearTimeout(this.timeouts.get(key));
-        }
-
-        // Store the value
-        this.cache.set(key, {
-            data: value,
-            timestamp: Date.now(),
-            ttl: ttl
-        });
-
-        // Set timeout to remove the cached item
-        const timeoutId = setTimeout(() => {
-            this.delete(key);
-        }, ttl);
-
-        this.timeouts.set(key, timeoutId);
+    set(key, data, ttl = API_CONFIG.CACHE_TTL) {
+        this.cache.set(key, data);
+        this.timestamps.set(key, Date.now() + ttl);
     }
 
     get(key) {
-        const item = this.cache.get(key);
-        if (!item) {
+        const timestamp = this.timestamps.get(key);
+        if (!timestamp || Date.now() > timestamp) {
+            this.cache.delete(key);
+            this.timestamps.delete(key);
             return null;
         }
-
-        // Check if item has expired
-        const now = Date.now();
-        if (now - item.timestamp > item.ttl) {
-            this.delete(key);
-            return null;
-        }
-
-        return item.data;
-    }
-
-    has(key) {
-        return this.get(key) !== null;
-    }
-
-    delete(key) {
-        if (this.timeouts.has(key)) {
-            clearTimeout(this.timeouts.get(key));
-            this.timeouts.delete(key);
-        }
-        return this.cache.delete(key);
+        return this.cache.get(key);
     }
 
     clear() {
-        // Clear all timeouts
-        for (const timeoutId of this.timeouts.values()) {
-            clearTimeout(timeoutId);
-        }
-        this.timeouts.clear();
         this.cache.clear();
+        this.timestamps.clear();
+    }
+
+    delete(key) {
+        this.cache.delete(key);
+        this.timestamps.delete(key);
     }
 }
 
 /**
- * Create axios instance with default configuration
+ * Custom API Error Class
  */
-const apiClient = axios.create({
-    baseURL: BASE_URL,
-    timeout: DEFAULT_TIMEOUT,
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    },
-});
-
-// Create cache instance
-const cache = new ApiCache();
-
-// Store active requests for cancellation
-const activeRequests = new Map();
+class APIError extends Error {
+    constructor(message, code, status, details) {
+        super(message);
+        this.name = 'APIError';
+        this.code = code;
+        this.status = status;
+        this.details = details;
+    }
+}
 
 /**
- * Retry logic implementation with exponential backoff
+ * API Client Class
  */
-const retryRequest = async (requestConfig, retryCount = 0) => {
-    try {
-        const response = await apiClient(requestConfig);
-        return response;
-    } catch (error) {
-        // Don't retry if request was cancelled
-        if (axios.isCancel(error)) {
-            throw error;
-        }
+class APIClient {
+    constructor() {
+        this.cache = new APICache();
+        this.cancelTokens = new Map();
+        this.loadingStates = new Map();
+        
+        // Create axios instance with base configuration
+        this.axiosInstance = axios.create({
+            baseURL: API_CONFIG.BASE_URL,
+            timeout: API_CONFIG.TIMEOUT,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+        });
 
-        // Don't retry client errors (4xx)
-        if (error.response && error.response.status >= 400 && error.response.status < 500) {
-            throw error;
-        }
+        // Setup request interceptor
+        this.axiosInstance.interceptors.request.use(
+            (config) => {
+                // Add request logging
+                console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
+                    params: config.params,
+                    data: config.data,
+                });
 
-        // Retry on network errors or server errors (5xx)
-        if (retryCount < MAX_RETRIES && (!error.response || error.response.status >= 500)) {
-            const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-            
-            console.warn(`API request failed, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-            
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return retryRequest(requestConfig, retryCount + 1);
-        }
+                // Add timestamp for request timing
+                config.metadata = { startTime: Date.now() };
+                return config;
+            },
+            (error) => {
+                console.error('[API] Request interceptor error:', error);
+                return Promise.reject(error);
+            }
+        );
 
-        throw error;
-    }
-};
+        // Setup response interceptor
+        this.axiosInstance.interceptors.response.use(
+            (response) => {
+                // Log response time
+                const duration = Date.now() - response.config.metadata.startTime;
+                console.log(`[API] Response ${response.status} in ${duration}ms`);
 
-/**
- * Request interceptor for logging and debugging
- */
-apiClient.interceptors.request.use(
-    (config) => {
-        console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
-        return config;
-    },
-    (error) => {
-        console.error('API Request Error:', error);
-        return Promise.reject(error);
-    }
-);
+                // Validate response envelope
+                if (response.data && response.data.status === 'success') {
+                    return response;
+                }
+                
+                // Handle error responses with success status code
+                const errorMessage = response.data?.error?.message || 'Unknown server error';
+                const errorCode = response.data?.error?.code || API_ERRORS.SERVER_ERROR;
+                throw new APIError(errorMessage, errorCode, response.status, response.data?.error?.details);
+            },
+            (error) => {
+                const duration = error.config?.metadata ? 
+                    Date.now() - error.config.metadata.startTime : 0;
+                
+                console.error(`[API] Error response in ${duration}ms:`, {
+                    message: error.message,
+                    status: error.response?.status,
+                    data: error.response?.data,
+                });
 
-/**
- * Response interceptor for error handling and logging
- */
-apiClient.interceptors.response.use(
-    (response) => {
-        console.log(`API Response: ${response.status} ${response.config.url}`);
-        return response;
-    },
-    (error) => {
-        if (!axios.isCancel(error)) {
-            console.error('API Response Error:', error);
-        }
-        return Promise.reject(error);
-    }
-);
+                // Transform axios errors to APIError
+                if (axios.isCancel(error)) {
+                    throw new APIError('Request cancelled', API_ERRORS.CANCELLED, null, error);
+                }
 
-/**
- * Transform API error to user-friendly format
- */
-const transformError = (error) => {
-    if (axios.isCancel(error)) {
-        return {
-            type: 'CANCELLED',
-            message: 'Request was cancelled',
-            originalError: error
-        };
-    }
+                if (error.code === 'ECONNABORTED') {
+                    throw new APIError('Request timeout', API_ERRORS.TIMEOUT, null, error);
+                }
 
-    if (!error.response) {
-        // Network error
-        return {
-            type: 'NETWORK_ERROR',
-            message: 'Unable to connect to the metrics service. Please ensure the FastAPI backend is running.',
-            originalError: error
-        };
-    }
+                if (!error.response) {
+                    throw new APIError('Network error', API_ERRORS.NETWORK_ERROR, null, error);
+                }
 
-    const { status, data } = error.response;
+                const status = error.response.status;
+                const data = error.response.data;
 
-    switch (status) {
-        case 404:
-            return {
-                type: 'NOT_FOUND',
-                message: 'The requested resource was not found',
-                originalError: error
-            };
-        case 422:
-            return {
-                type: 'VALIDATION_ERROR',
-                message: data?.error?.message || 'Invalid request parameters',
-                details: data?.error?.details,
-                originalError: error
-            };
-        case 500:
-            return {
-                type: 'SERVER_ERROR',
-                message: 'Internal server error occurred while processing your request',
-                originalError: error
-            };
-        default:
-            return {
-                type: 'API_ERROR',
-                message: data?.error?.message || `Request failed with status ${status}`,
-                originalError: error
-            };
-    }
-};
+                if (status === 404) {
+                    throw new APIError('Resource not found', API_ERRORS.NOT_FOUND, status, data);
+                }
 
-/**
- * Transform API response to match frontend expectations
- */
-const transformResponse = (response) => {
-    // Extract data from envelope format
-    if (response.data && response.data.status === 'success') {
-        return {
-            data: response.data.data,
-            metadata: response.data.metadata,
-            timestamp: response.data.timestamp
-        };
+                if (status >= 400 && status < 500) {
+                    const message = data?.error?.message || 'Invalid request';
+                    throw new APIError(message, API_ERRORS.INVALID_REQUEST, status, data);
+                }
+
+                if (status >= 500) {
+                    const message = data?.error?.message || 'Server error';
+                    throw new APIError(message, API_ERRORS.SERVER_ERROR, status, data);
+                }
+
+                throw error;
+            }
+        );
     }
 
-    // Fallback for direct data responses
-    return {
-        data: response.data,
-        metadata: {},
-        timestamp: new Date().toISOString()
-    };
-};
-
-/**
- * Generate cache key for requests
- */
-const generateCacheKey = (method, url, params = null) => {
-    const paramString = params ? JSON.stringify(params) : '';
-    return `${method}:${url}:${paramString}`;
-};
-
-/**
- * Core API methods
- */
-const api = {
     /**
-     * Fetch list of all available performance run metrics
-     * @returns {Promise<Object>} List of historical run summaries with metadata
+     * Execute request with retry logic and exponential backoff
+     * @param {Function} requestFn - Function that returns a promise
+     * @param {number} maxRetries - Maximum retry attempts
+     * @param {number} delay - Initial delay between retries
+     * @returns {Promise} Request promise
+     */
+    async executeWithRetry(requestFn, maxRetries = API_CONFIG.MAX_RETRIES, delay = API_CONFIG.RETRY_DELAY) {
+        let lastError;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await requestFn();
+            } catch (error) {
+                lastError = error;
+
+                // Don't retry cancelled requests or client errors
+                if (error.code === API_ERRORS.CANCELLED || 
+                    (error.status >= 400 && error.status < 500)) {
+                    throw error;
+                }
+
+                // Don't retry on last attempt
+                if (attempt === maxRetries) {
+                    break;
+                }
+
+                // Exponential backoff with jitter
+                const backoffDelay = delay * Math.pow(2, attempt) + Math.random() * 1000;
+                console.log(`[API] Retry attempt ${attempt + 1}/${maxRetries + 1} in ${Math.round(backoffDelay)}ms`);
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            }
+        }
+
+        throw lastError;
+    }
+
+    /**
+     * Generate cache key for request
+     * @param {string} endpoint - API endpoint
+     * @param {Object} params - Request parameters
+     * @returns {string} Cache key
+     */
+    generateCacheKey(endpoint, params = {}) {
+        const paramString = Object.keys(params)
+            .sort()
+            .map(key => `${key}=${JSON.stringify(params[key])}`)
+            .join('&');
+        return `${endpoint}?${paramString}`;
+    }
+
+    /**
+     * Set loading state for a request
+     * @param {string} key - Loading key
+     * @param {boolean} loading - Loading state
+     */
+    setLoadingState(key, loading) {
+        this.loadingStates.set(key, loading);
+    }
+
+    /**
+     * Get loading state for a request
+     * @param {string} key - Loading key
+     * @returns {boolean} Loading state
+     */
+    getLoadingState(key) {
+        return this.loadingStates.get(key) || false;
+    }
+
+    /**
+     * Create cancellation token for a request
+     * @param {string} key - Request key
+     * @returns {Object} Cancel token
+     */
+    createCancelToken(key) {
+        // Cancel existing request if any
+        const existingSource = this.cancelTokens.get(key);
+        if (existingSource) {
+            existingSource.cancel('New request initiated');
+        }
+
+        // Create new cancel token
+        const source = axios.CancelToken.source();
+        this.cancelTokens.set(key, source);
+        return source.token;
+    }
+
+    /**
+     * Get list of all historical runs
+     * @returns {Promise<Array>} Array of run metadata objects
      */
     async getRunsList() {
-        const cacheKey = generateCacheKey('GET', '/api/runs');
-        
+        const endpoint = '/api/runs';
+        const cacheKey = this.generateCacheKey(endpoint);
+        const loadingKey = 'getRunsList';
+
         // Check cache first
-        if (cache.has(cacheKey)) {
-            console.log('Returning cached runs list');
-            return cache.get(cacheKey);
+        const cachedData = this.cache.get(cacheKey);
+        if (cachedData) {
+            console.log('[API] Returning cached runs list');
+            return cachedData;
+        }
+
+        // Check if already loading
+        if (this.getLoadingState(loadingKey)) {
+            throw new APIError('Request already in progress', API_ERRORS.INVALID_REQUEST, 409);
         }
 
         try {
-            const cancelToken = axios.CancelToken.source();
-            activeRequests.set('getRunsList', cancelToken);
+            this.setLoadingState(loadingKey, true);
+            const cancelToken = this.createCancelToken(loadingKey);
 
-            const requestConfig = {
-                method: 'GET',
-                url: '/api/runs',
-                cancelToken: cancelToken.token
-            };
+            const response = await this.executeWithRetry(async () => {
+                return await this.axiosInstance.get(endpoint, { cancelToken });
+            });
 
-            const response = await retryRequest(requestConfig);
-            const transformedResponse = transformResponse(response);
-            
-            // Cache the response
-            cache.set(cacheKey, transformedResponse);
-            
-            return transformedResponse;
-        } catch (error) {
-            throw transformError(error);
+            // Transform and cache response
+            const runs = response.data.data || [];
+            const transformedRuns = runs.map(run => ({
+                id: run.id,
+                timestamp: new Date(run.timestamp),
+                duration: run.duration,
+                recordsGenerated: run.records_generated,
+                status: run.status,
+                metrics: {
+                    throughput: run.metrics?.throughput || 0,
+                    cpuUsage: run.metrics?.cpu_usage || 0,
+                    memoryUsage: run.metrics?.memory_usage || 0,
+                    errorCount: run.metrics?.error_count || 0,
+                }
+            }));
+
+            this.cache.set(cacheKey, transformedRuns, API_CONFIG.CACHE_TTL);
+            return transformedRuns;
+
         } finally {
-            activeRequests.delete('getRunsList');
+            this.setLoadingState(loadingKey, false);
+            this.cancelTokens.delete(loadingKey);
         }
-    },
+    }
 
     /**
-     * Retrieve detailed metrics for a specific performance run
-     * @param {string} runId - Unique identifier for the run
-     * @returns {Promise<Object>} Complete metrics for individual run
+     * Get detailed metrics for a specific run
+     * @param {string} runId - Unique run identifier
+     * @returns {Promise<Object>} Detailed run metrics object
      */
     async getRunDetails(runId) {
         if (!runId) {
-            throw {
-                type: 'VALIDATION_ERROR',
-                message: 'Run ID is required'
-            };
+            throw new APIError('Run ID is required', API_ERRORS.INVALID_REQUEST, 400);
         }
 
-        const cacheKey = generateCacheKey('GET', `/api/runs/${runId}`);
-        
+        const endpoint = `/api/runs/${runId}`;
+        const cacheKey = this.generateCacheKey(endpoint);
+        const loadingKey = `getRunDetails:${runId}`;
+
         // Check cache first
-        if (cache.has(cacheKey)) {
-            console.log(`Returning cached run details for ${runId}`);
-            return cache.get(cacheKey);
+        const cachedData = this.cache.get(cacheKey);
+        if (cachedData) {
+            console.log(`[API] Returning cached run details for ${runId}`);
+            return cachedData;
+        }
+
+        // Check if already loading
+        if (this.getLoadingState(loadingKey)) {
+            throw new APIError('Request already in progress', API_ERRORS.INVALID_REQUEST, 409);
         }
 
         try {
-            const cancelToken = axios.CancelToken.source();
-            activeRequests.set(`getRunDetails_${runId}`, cancelToken);
+            this.setLoadingState(loadingKey, true);
+            const cancelToken = this.createCancelToken(loadingKey);
 
-            const requestConfig = {
-                method: 'GET',
-                url: `/api/runs/${runId}`,
-                cancelToken: cancelToken.token
+            const response = await this.executeWithRetry(async () => {
+                return await this.axiosInstance.get(endpoint, { cancelToken });
+            });
+
+            // Transform response data
+            const runData = response.data.data;
+            const transformedRun = {
+                id: runData.id,
+                timestamp: new Date(runData.timestamp),
+                duration: runData.duration,
+                status: runData.status,
+                configuration: runData.configuration || {},
+                metrics: {
+                    timing: {
+                        totalDuration: runData.metrics?.timing?.total_duration || 0,
+                        setupTime: runData.metrics?.timing?.setup_time || 0,
+                        generationTime: runData.metrics?.timing?.generation_time || 0,
+                        writeTime: runData.metrics?.timing?.write_time || 0,
+                        cleanupTime: runData.metrics?.timing?.cleanup_time || 0,
+                    },
+                    performance: {
+                        recordsPerSecond: runData.metrics?.performance?.records_per_second || 0,
+                        avgBatchSize: runData.metrics?.performance?.avg_batch_size || 0,
+                        peakMemoryUsage: runData.metrics?.performance?.peak_memory_usage || 0,
+                        avgCpuUsage: runData.metrics?.performance?.avg_cpu_usage || 0,
+                        diskIOOperations: runData.metrics?.performance?.disk_io_operations || 0,
+                    },
+                    stages: {
+                        coordinator: runData.metrics?.stages?.coordinator || {},
+                        creators: runData.metrics?.stages?.creators || [],
+                        writers: runData.metrics?.stages?.writers || [],
+                    },
+                    errors: runData.metrics?.errors || [],
+                },
+                outputs: runData.outputs || [],
             };
 
-            const response = await retryRequest(requestConfig);
-            const transformedResponse = transformResponse(response);
-            
-            // Cache the response
-            cache.set(cacheKey, transformedResponse);
-            
-            return transformedResponse;
-        } catch (error) {
-            throw transformError(error);
+            this.cache.set(cacheKey, transformedRun, API_CONFIG.CACHE_TTL);
+            return transformedRun;
+
         } finally {
-            activeRequests.delete(`getRunDetails_${runId}`);
+            this.setLoadingState(loadingKey, false);
+            this.cancelTokens.delete(loadingKey);
         }
-    },
+    }
 
     /**
      * Compare performance metrics across multiple runs
      * @param {Array<string>} runIds - Array of run IDs to compare
-     * @returns {Promise<Object>} Side-by-side performance comparisons
+     * @returns {Promise<Object>} Comparison analysis object
      */
     async compareRuns(runIds) {
-        if (!Array.isArray(runIds) || runIds.length === 0) {
-            throw {
-                type: 'VALIDATION_ERROR',
-                message: 'Run IDs array is required and must not be empty'
-            };
+        if (!runIds || !Array.isArray(runIds) || runIds.length === 0) {
+            throw new APIError('At least one run ID is required for comparison', API_ERRORS.INVALID_REQUEST, 400);
         }
 
-        if (runIds.length < 2) {
-            throw {
-                type: 'VALIDATION_ERROR',
-                message: 'At least two run IDs are required for comparison'
-            };
+        if (runIds.length > 10) {
+            throw new APIError('Cannot compare more than 10 runs at once', API_ERRORS.INVALID_REQUEST, 400);
         }
 
-        const cacheKey = generateCacheKey('GET', '/api/runs/compare', { run_ids: runIds.sort() });
-        
+        const endpoint = '/api/runs/compare';
+        const params = { run_ids: runIds.join(',') };
+        const cacheKey = this.generateCacheKey(endpoint, params);
+        const loadingKey = `compareRuns:${runIds.join(',')}`;
+
         // Check cache first
-        if (cache.has(cacheKey)) {
-            console.log(`Returning cached run comparison for ${runIds.length} runs`);
-            return cache.get(cacheKey);
+        const cachedData = this.cache.get(cacheKey);
+        if (cachedData) {
+            console.log(`[API] Returning cached comparison for runs: ${runIds.join(', ')}`);
+            return cachedData;
+        }
+
+        // Check if already loading
+        if (this.getLoadingState(loadingKey)) {
+            throw new APIError('Comparison request already in progress', API_ERRORS.INVALID_REQUEST, 409);
         }
 
         try {
-            const cancelToken = axios.CancelToken.source();
-            activeRequests.set('compareRuns', cancelToken);
+            this.setLoadingState(loadingKey, true);
+            const cancelToken = this.createCancelToken(loadingKey);
 
-            const requestConfig = {
-                method: 'GET',
-                url: '/api/runs/compare',
-                params: {
-                    run_ids: runIds.join(',')
+            const response = await this.executeWithRetry(async () => {
+                return await this.axiosInstance.get(endpoint, { 
+                    params,
+                    cancelToken 
+                });
+            });
+
+            // Transform comparison data
+            const comparisonData = response.data.data;
+            const transformedComparison = {
+                runIds: runIds,
+                comparedAt: new Date(response.data.timestamp),
+                summary: {
+                    totalRuns: comparisonData.summary?.total_runs || runIds.length,
+                    avgDuration: comparisonData.summary?.avg_duration || 0,
+                    avgThroughput: comparisonData.summary?.avg_throughput || 0,
+                    bestPerformingRun: comparisonData.summary?.best_performing_run || null,
+                    worstPerformingRun: comparisonData.summary?.worst_performing_run || null,
                 },
-                cancelToken: cancelToken.token
+                metrics: {
+                    duration: comparisonData.metrics?.duration || [],
+                    throughput: comparisonData.metrics?.throughput || [],
+                    memoryUsage: comparisonData.metrics?.memory_usage || [],
+                    cpuUsage: comparisonData.metrics?.cpu_usage || [],
+                    errorRates: comparisonData.metrics?.error_rates || [],
+                },
+                analysis: {
+                    performanceTrend: comparisonData.analysis?.performance_trend || 'stable',
+                    significantDifferences: comparisonData.analysis?.significant_differences || [],
+                    recommendations: comparisonData.analysis?.recommendations || [],
+                },
+                runDetails: (comparisonData.run_details || []).map(run => ({
+                    id: run.id,
+                    timestamp: new Date(run.timestamp),
+                    duration: run.duration,
+                    recordsGenerated: run.records_generated,
+                    throughput: run.throughput,
+                    status: run.status,
+                })),
             };
 
-            const response = await retryRequest(requestConfig);
-            const transformedResponse = transformResponse(response);
-            
-            // Cache the response
-            cache.set(cacheKey, transformedResponse);
-            
-            return transformedResponse;
-        } catch (error) {
-            throw transformError(error);
+            // Cache with shorter TTL for comparison data
+            this.cache.set(cacheKey, transformedComparison, API_CONFIG.CACHE_TTL / 2);
+            return transformedComparison;
+
         } finally {
-            activeRequests.delete('compareRuns');
+            this.setLoadingState(loadingKey, false);
+            this.cancelTokens.delete(loadingKey);
         }
-    },
+    }
 
     /**
-     * Fetch current/latest performance metrics for active or most recent run
-     * @returns {Promise<Object>} Current execution performance data
+     * Get real-time metrics for currently active or most recent run
+     * @returns {Promise<Object>} Latest metrics object
      */
     async getLatestMetrics() {
-        try {
-            const cancelToken = axios.CancelToken.source();
-            activeRequests.set('getLatestMetrics', cancelToken);
+        const endpoint = '/api/metrics/latest';
+        const loadingKey = 'getLatestMetrics';
 
-            const requestConfig = {
-                method: 'GET',
-                url: '/api/metrics/latest',
-                cancelToken: cancelToken.token
+        // Don't cache latest metrics as they should be real-time
+        // Check if already loading
+        if (this.getLoadingState(loadingKey)) {
+            throw new APIError('Latest metrics request already in progress', API_ERRORS.INVALID_REQUEST, 409);
+        }
+
+        try {
+            this.setLoadingState(loadingKey, true);
+            const cancelToken = this.createCancelToken(loadingKey);
+
+            const response = await this.executeWithRetry(async () => {
+                return await this.axiosInstance.get(endpoint, { cancelToken });
+            }, 1, 500); // Fewer retries for real-time data
+
+            // Transform latest metrics data
+            const metricsData = response.data.data;
+            const transformedMetrics = {
+                timestamp: new Date(response.data.timestamp),
+                isActive: metricsData.is_active || false,
+                currentRunId: metricsData.current_run_id || null,
+                status: metricsData.status || 'idle',
+                progress: {
+                    percentage: metricsData.progress?.percentage || 0,
+                    recordsProcessed: metricsData.progress?.records_processed || 0,
+                    recordsTotal: metricsData.progress?.records_total || 0,
+                    estimatedTimeRemaining: metricsData.progress?.estimated_time_remaining || null,
+                },
+                realtime: {
+                    currentThroughput: metricsData.realtime?.current_throughput || 0,
+                    avgThroughput: metricsData.realtime?.avg_throughput || 0,
+                    cpuUsage: metricsData.realtime?.cpu_usage || 0,
+                    memoryUsage: metricsData.realtime?.memory_usage || 0,
+                    activeCreators: metricsData.realtime?.active_creators || 0,
+                    activeWriters: metricsData.realtime?.active_writers || 0,
+                    queueDepth: metricsData.realtime?.queue_depth || 0,
+                },
+                lastCompleted: metricsData.last_completed ? {
+                    runId: metricsData.last_completed.run_id,
+                    timestamp: new Date(metricsData.last_completed.timestamp),
+                    duration: metricsData.last_completed.duration,
+                    recordsGenerated: metricsData.last_completed.records_generated,
+                    status: metricsData.last_completed.status,
+                } : null,
             };
 
-            // Don't cache latest metrics as they should always be fresh
-            const response = await retryRequest(requestConfig);
-            const transformedResponse = transformResponse(response);
-            
-            return transformedResponse;
-        } catch (error) {
-            throw transformError(error);
+            return transformedMetrics;
+
         } finally {
-            activeRequests.delete('getLatestMetrics');
+            this.setLoadingState(loadingKey, false);
+            this.cancelTokens.delete(loadingKey);
         }
-    },
+    }
 
     /**
-     * Cancel active API requests
-     * @param {string} requestKey - Specific request to cancel, or null for all
+     * Cancel a specific request by key
+     * @param {string} requestKey - Key identifying the request to cancel
+     * @returns {boolean} True if request was cancelled, false if not found
      */
-    cancelRequest(requestKey = null) {
-        if (requestKey) {
-            const cancelToken = activeRequests.get(requestKey);
-            if (cancelToken) {
-                cancelToken.cancel(`Request ${requestKey} cancelled by user`);
-                activeRequests.delete(requestKey);
-                console.log(`Cancelled request: ${requestKey}`);
-            }
-        } else {
-            // Cancel all active requests
-            for (const [key, cancelToken] of activeRequests.entries()) {
-                cancelToken.cancel(`Request ${key} cancelled by user`);
-                console.log(`Cancelled request: ${key}`);
-            }
-            activeRequests.clear();
+    cancelRequest(requestKey) {
+        const cancelSource = this.cancelTokens.get(requestKey);
+        if (cancelSource) {
+            cancelSource.cancel(`Request ${requestKey} cancelled by user`);
+            this.cancelTokens.delete(requestKey);
+            this.setLoadingState(requestKey, false);
+            console.log(`[API] Cancelled request: ${requestKey}`);
+            return true;
         }
-    },
+        return false;
+    }
 
     /**
-     * Clear cached API responses
-     * @param {string} pattern - Optional pattern to match keys for selective clearing
+     * Cancel all active requests
+     * @returns {number} Number of requests cancelled
+     */
+    cancelAllRequests() {
+        let cancelledCount = 0;
+        
+        this.cancelTokens.forEach((cancelSource, key) => {
+            cancelSource.cancel('All requests cancelled');
+            this.setLoadingState(key, false);
+            cancelledCount++;
+        });
+
+        this.cancelTokens.clear();
+        console.log(`[API] Cancelled ${cancelledCount} active requests`);
+        return cancelledCount;
+    }
+
+    /**
+     * Clear all cached data
+     * @param {string} pattern - Optional pattern to match cache keys for selective clearing
      */
     clearCache(pattern = null) {
         if (pattern) {
             // Clear cache entries matching pattern
             const keysToDelete = [];
-            for (const key of cache.cache.keys()) {
+            this.cache.cache.forEach((value, key) => {
                 if (key.includes(pattern)) {
                     keysToDelete.push(key);
                 }
-            }
-            keysToDelete.forEach(key => cache.delete(key));
-            console.log(`Cleared ${keysToDelete.length} cached entries matching pattern: ${pattern}`);
+            });
+
+            keysToDelete.forEach(key => this.cache.delete(key));
+            console.log(`[API] Cleared ${keysToDelete.length} cache entries matching pattern: ${pattern}`);
         } else {
             // Clear all cache
-            cache.clear();
-            console.log('Cleared all cached API responses');
+            this.cache.clear();
+            console.log('[API] Cleared all cache entries');
         }
+    }
+
+    /**
+     * Get current cache statistics
+     * @returns {Object} Cache statistics
+     */
+    getCacheStats() {
+        return {
+            totalEntries: this.cache.cache.size,
+            memoryUsage: JSON.stringify([...this.cache.cache.entries()]).length,
+            oldestEntry: Math.min(...Array.from(this.cache.timestamps.values())),
+            newestEntry: Math.max(...Array.from(this.cache.timestamps.values())),
+        };
+    }
+
+    /**
+     * Get current loading states
+     * @returns {Object} Loading states map
+     */
+    getLoadingStates() {
+        return Object.fromEntries(this.loadingStates);
+    }
+
+    /**
+     * Health check for the API service
+     * @returns {Promise<Object>} Health status
+     */
+    async healthCheck() {
+        try {
+            const response = await this.axiosInstance.get('/health', {
+                timeout: 5000,
+            });
+            
+            return {
+                status: 'healthy',
+                timestamp: new Date(),
+                version: response.data.version || 'unknown',
+                uptime: response.data.uptime || 0,
+            };
+        } catch (error) {
+            return {
+                status: 'unhealthy',
+                timestamp: new Date(),
+                error: error.message,
+            };
+        }
+    }
+}
+
+// Create singleton instance
+const apiClient = new APIClient();
+
+// Export the api object with all required methods
+const api = {
+    /**
+     * Get list of all historical runs
+     * @returns {Promise<Array>} Array of run metadata objects
+     */
+    getRunsList: () => apiClient.getRunsList(),
+
+    /**
+     * Get detailed metrics for a specific run
+     * @param {string} runId - Unique run identifier
+     * @returns {Promise<Object>} Detailed run metrics object
+     */
+    getRunDetails: (runId) => apiClient.getRunDetails(runId),
+
+    /**
+     * Compare performance metrics across multiple runs
+     * @param {Array<string>} runIds - Array of run IDs to compare
+     * @returns {Promise<Object>} Comparison analysis object
+     */
+    compareRuns: (runIds) => apiClient.compareRuns(runIds),
+
+    /**
+     * Get real-time metrics for currently active or most recent run
+     * @returns {Promise<Object>} Latest metrics object
+     */
+    getLatestMetrics: () => apiClient.getLatestMetrics(),
+
+    /**
+     * Cancel a specific request or all requests
+     * @param {string} requestKey - Optional key identifying specific request to cancel
+     * @returns {boolean|number} True/count if requests were cancelled
+     */
+    cancelRequest: (requestKey = null) => {
+        return requestKey ? 
+            apiClient.cancelRequest(requestKey) : 
+            apiClient.cancelAllRequests();
+    },
+
+    /**
+     * Clear cached data
+     * @param {string} pattern - Optional pattern to match cache keys for selective clearing
+     */
+    clearCache: (pattern = null) => apiClient.clearCache(pattern),
+
+    /**
+     * Utility methods for debugging and monitoring
+     */
+    _debug: {
+        getCacheStats: () => apiClient.getCacheStats(),
+        getLoadingStates: () => apiClient.getLoadingStates(),
+        healthCheck: () => apiClient.healthCheck(),
+        cancelAllRequests: () => apiClient.cancelAllRequests(),
     }
 };
 
