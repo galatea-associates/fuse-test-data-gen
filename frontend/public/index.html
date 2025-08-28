@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="FUSE Test Data Generator Performance Monitoring Dashboard - Real-time performance metrics and analytics for data generation pipeline execution" />
+    <meta name="author" content="Galatea Associates" />
+    
+    <!-- Favicon and app icons -->
+    <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png" />
+    
+    <!-- Web App Manifest for PWA capabilities -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Title for the application -->
+    <title>FUSE Performance Monitor</title>
+    
+    <!-- Preload critical assets for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Google Fonts for professional dashboard appearance -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <!-- Critical CSS for immediate rendering -->
+    <style>
+        /* Reset and base styles */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f8fafc;
+            color: #334155;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Loading spinner for initial app load */
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            flex-direction: column;
+            background-color: #f8fafc;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        /* Error fallback styles */
+        .error-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            flex-direction: column;
+            background-color: #fef2f2;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .error-title {
+            color: #dc2626;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .error-message {
+            color: #991b1b;
+            font-size: 16px;
+            margin-bottom: 24px;
+            max-width: 500px;
+        }
+        
+        .error-button {
+            background-color: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .error-button:hover {
+            background-color: #b91c1c;
+        }
+        
+        /* Accessibility improvements */
+        @media (prefers-reduced-motion: reduce) {
+            .loading-spinner {
+                animation: none;
+            }
+        }
+        
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            body {
+                background-color: #ffffff;
+                color: #000000;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Accessibility skip link -->
+    <a href="#root" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-blue-600 text-white px-4 py-2 rounded">
+        Skip to main content
+    </a>
+    
+    <!-- Root element where React application will mount -->
+    <div id="root">
+        <!-- Loading fallback content displayed while React app initializes -->
+        <div class="loading-container">
+            <div class="loading-spinner" role="status" aria-label="Loading FUSE Performance Monitor"></div>
+            <div class="loading-text">Loading FUSE Performance Monitor...</div>
+        </div>
+    </div>
+    
+    <!-- Fallback content for users with JavaScript disabled -->
+    <noscript>
+        <div class="error-container">
+            <h1 class="error-title">JavaScript Required</h1>
+            <p class="error-message">
+                The FUSE Performance Monitor requires JavaScript to function properly. 
+                Please enable JavaScript in your browser settings and refresh the page.
+            </p>
+            <button class="error-button" onclick="window.location.reload()">
+                Retry
+            </button>
+        </div>
+    </noscript>
+    
+    <!-- Script tags for React application bundle will be injected here by build process -->
+    <!-- These placeholders are replaced during the React build process -->
+    
+    <!-- Error boundary fallback for JavaScript errors -->
+    <script>
+        // Global error handler for unhandled JavaScript errors
+        window.addEventListener('error', function(event) {
+            console.error('Global error caught:', event.error);
+            
+            // Check if React failed to load
+            if (!window.React) {
+                const root = document.getElementById('root');
+                if (root) {
+                    root.innerHTML = `
+                        <div class="error-container">
+                            <h1 class="error-title">Application Error</h1>
+                            <p class="error-message">
+                                Failed to load the FUSE Performance Monitor application. 
+                                Please refresh the page or contact support if the problem persists.
+                            </p>
+                            <button class="error-button" onclick="window.location.reload()">
+                                Refresh Page
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        });
+        
+        // Handle unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
+        
+        // Performance monitoring for development
+        if (process.env.NODE_ENV === 'development') {
+            // Log performance metrics to console for debugging
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    const perfData = performance.getEntriesByType('navigation')[0];
+                    console.log('Page load performance:', {
+                        domContentLoaded: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart,
+                        loadComplete: perfData.loadEventEnd - perfData.loadEventStart,
+                        totalTime: perfData.loadEventEnd - perfData.navigationStart
+                    });
+                }, 0);
+            });
+        }
+    </script>
+</body>
+</html>
