@@ -4,7 +4,7 @@
 #
 #    pip-compile
 #
-astroid==3.3.8
+astroid==3.2.4
     # via
     #   -r requirements.in
     #   pylint
@@ -36,11 +36,11 @@ cloudpickle==3.1.1
     #   dask
 colorama==0.4.6
     # via -r requirements.in
-coverage[toml]==7.6.10
+coverage[toml]==7.6.1
     # via
     #   -r requirements.in
     #   pytest-cov
-dask==2025.1.0
+dask==2023.5.0
     # via -r requirements.in
 dicttoxml==1.7.16
     # via -r requirements.in
