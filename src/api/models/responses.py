@@ -286,10 +286,11 @@ class RunListResponse(BaseModel):
 
 class RunDetailResponse(BaseModel):
     """
-    Response model for the /api/runs/{run_id} endpoint providing complete run details.
+    Response model for the /api/runs/{run_id} endpoint providing complete run
+    details.
 
-    Contains comprehensive metrics, configuration, execution context, and file outputs
-    for a specific data generation run.
+    Contains comprehensive metrics, configuration, execution context, and file
+    outputs for a specific data generation run.
     """
     run_id: str = Field(
         ...,
@@ -353,7 +354,8 @@ class ComparisonMetrics(BaseModel):
     )
     delta_analysis: Dict[str, Union[float, str]] = Field(
         ...,
-        description="Performance deltas compared to other runs in the comparison",
+        description="Performance deltas compared to other runs in the "
+                    "comparison",
         example={
             "duration_delta_seconds": -5.2,
             "throughput_delta_percent": 12.5,
@@ -373,7 +375,8 @@ class ComparisonMetrics(BaseModel):
 
 class CompareRunsResponse(BaseModel):
     """
-    Response model for the /api/runs/compare endpoint providing multi-run analysis.
+    Response model for the /api/runs/compare endpoint providing multi-run
+    analysis.
 
     Contains comparison data for multiple runs with differential analysis,
     performance rankings, and optimization recommendations.
@@ -384,16 +387,20 @@ class CompareRunsResponse(BaseModel):
     )
     comparison_analysis: Dict[str, Any] = Field(
         ...,
-        description="Aggregate comparison analysis across all selected runs",
+        description="Aggregate comparison analysis across all selected "
+                    "runs",
         example={
             "performance_variance": 0.15,
-            "optimization_opportunities": ["batch_size_tuning", "worker_count_optimization"],
+            "optimization_opportunities": [
+                "batch_size_tuning", "worker_count_optimization"
+            ],
             "trend_analysis": "improving"
         }
     )
     best_performer: Dict[str, str] = Field(
         ...,
-        description="Identification of best performing run by different metrics",
+        description="Identification of best performing run by different "
+                    "metrics",
         example={
             "fastest_duration": "run_20240801_143022",
             "highest_throughput": "run_20240801_101530",
@@ -402,11 +409,13 @@ class CompareRunsResponse(BaseModel):
     )
     recommendations: List[Dict[str, Any]] = Field(
         ...,
-        description="Performance optimization recommendations based on comparison analysis",
+        description="Performance optimization recommendations based on "
+                    "comparison analysis",
         example=[
             {
                 "category": "configuration",
-                "recommendation": "Increase batch size to 1500 for optimal throughput",
+                "recommendation": "Increase batch size to 1500 for optimal "
+                                  "throughput",
                 "expected_improvement": "8-12% throughput increase"
             }
         ]
@@ -415,10 +424,11 @@ class CompareRunsResponse(BaseModel):
 
 class LatestMetricsResponse(BaseModel):
     """
-    Response model for the /api/metrics/latest endpoint providing real-time data.
+    Response model for the /api/metrics/latest endpoint providing real-time
+    data.
 
-    Contains current run information, latest completed run metrics, active status,
-    and real-time performance indicators for live monitoring.
+    Contains current run information, latest completed run metrics, active
+    status, and real-time performance indicators for live monitoring.
     """
     current_run: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -432,7 +442,8 @@ class LatestMetricsResponse(BaseModel):
     )
     latest_completed: Optional[RunSummary] = Field(
         default=None,
-        description="Summary information for the most recently completed run"
+        description="Summary information for the most recently completed "
+                    "run"
     )
     is_active: bool = Field(
         ...,
@@ -442,7 +453,8 @@ class LatestMetricsResponse(BaseModel):
 
     real_time_metrics: Dict[str, Any] = Field(
         ...,
-        description="Live performance metrics for the active run or system status",
+        description="Live performance metrics for the active run or system "
+                    "status",
         example={
             "current_throughput": 2150.0,
             "records_processed": 65200,
