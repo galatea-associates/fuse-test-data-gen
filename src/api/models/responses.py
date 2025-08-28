@@ -114,7 +114,7 @@ class PaginationMeta(BaseModel):
     )
     total_pages: int = Field(
         ...,
-        ge=1,
+        ge=0,
         description="Total number of available pages",
         example=5
     )
