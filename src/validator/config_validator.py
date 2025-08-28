@@ -83,8 +83,8 @@ def validate_record_counts(factory_definitions):
     for domain_object, config in factory_definitions.items():
         record_count = config['fixed_args']['record_count']
         if record_count < 0:
-            errors.append(f'- Record count for domain object ' +
-                          f'\'{domain_object}\' is less than 0')
+            errors.append('- Record count for domain object ' +
+                          f'{domain_object} is less than 0')
     return errors
 
 
@@ -110,8 +110,8 @@ def validate_max_file_size(factory_definitions):
     for domain_object, config in factory_definitions.items():
         file_size = config['max_objects_per_file']
         if file_size < 0:
-            errors.append(f'- File size for domain object ' +
-                          f'\'{domain_object}\' is less than 0')
+            errors.append('- File size for domain object ' +
+                          f'{domain_object} is less than 0')
     return errors
 
 
@@ -280,7 +280,7 @@ def validate_google_drive_flag(factory_definitions):
     for domain_object, config in factory_definitions.items():
         google_drive_flag = config['upload_to_google_drive']
         if google_drive_flag.upper() not in ("TRUE", "FALSE"):
-            errors.append(f"- Invalid Google Drive Flag " +
-                          f"\'{google_drive_flag}\' for domain object " +
-                          f"\'{domain_object}\'")
+            errors.append("- Invalid Google Drive Flag " +
+                          f"{google_drive_flag} for domain object " +
+                          f"{domain_object}")
     return errors
