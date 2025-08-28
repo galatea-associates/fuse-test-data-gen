@@ -1,0 +1,81 @@
+{
+  "short_name": "FUSE Monitor",
+  "name": "FUSE Performance Monitor",
+  "description": "Performance monitoring and analytics dashboard for FUSE Test Data Generator with real-time metrics visualization and historical run analysis",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["productivity", "developer", "utilities"],
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View performance dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Compare Runs",
+      "short_name": "Compare",
+      "description": "Compare performance across runs",
+      "url": "/compare",
+      "icons": [
+        {
+          "src": "logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "screenshots": [
+    {
+      "src": "screenshot-desktop.png",
+      "type": "image/png",
+      "sizes": "1280x720",
+      "form_factor": "wide",
+      "label": "Performance Dashboard Desktop View"
+    },
+    {
+      "src": "screenshot-mobile.png",
+      "type": "image/png",
+      "sizes": "375x812",
+      "form_factor": "narrow",
+      "label": "Performance Dashboard Mobile View"
+    }
+  ]
+}
