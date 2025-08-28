@@ -275,7 +275,10 @@ const RunComparison = ({
             const runs = await api.getRunsList();
             setAvailableRuns(runs.sort((a, b) => b.timestamp - a.timestamp));
         } catch (err) {
-            console.error('Failed to load available runs:', err);
+            // Development-only error logging
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Failed to load available runs:', err); // eslint-disable-line no-console
+            }
             setError(`Failed to load available runs: ${err.message}`);
         } finally {
             setRunsLoading(false);
@@ -298,7 +301,10 @@ const RunComparison = ({
             const comparison = await api.compareRuns(runIds);
             setComparisonData(comparison);
         } catch (err) {
-            console.error('Failed to load comparison data:', err);
+            // Development-only error logging
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Failed to load comparison data:', err); // eslint-disable-line no-console
+            }
             setError(`Failed to load comparison data: ${err.message}`);
             setComparisonData(null);
         } finally {
