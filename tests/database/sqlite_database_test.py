@@ -368,7 +368,7 @@ def test_create_table_from_dict():
     database_rows = cursor.fetchall()
     rows = []
     for row in database_rows:
-        rows.append([row['name'], row['type']])
+        rows.append([row['name'], row['type'].lower()])
 
     # table exists after creation
     shared.expected_value(1, exists[0])
