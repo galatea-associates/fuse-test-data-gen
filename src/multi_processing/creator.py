@@ -1,5 +1,6 @@
 import time
 from multi_processing import pool_tasks
+from metrics.metrics_collector import MetricsCollector
 
 
 class Creator:
@@ -80,34 +81,94 @@ class Creator:
             records from create jobs
         """
 
-        number_of_create_child_processes =\
-            object_factory.get_shared_args()[
-                'number_of_create_child_processes'
-            ]
+        # Initialize metrics collector for performance monitoring
+        metrics_collector = MetricsCollector()
+        
+        # Use metrics collector as context manager for comprehensive timing
+        with metrics_collector:
+            metrics_collector.record_start('creator_parent_process_total')
 
-        # the maximum number of jobs to dequeue for processing is proportional
-        # to the number of processes available to execute the jobs
+            number_of_create_child_processes =\
+                object_factory.get_shared_args()[
+                    'number_of_create_child_processes'
+                ]
 
-        maximum_number_of_create_jobs_to_dequeue = \
-            number_of_create_child_processes * 2
+            # the maximum number of jobs to dequeue for processing is proportional
+            # to the number of processes available to execute the jobs
 
-        while not self.terminate_dequeued:
-            self.sleep_while_create_job_queue_empty()
+            maximum_number_of_create_jobs_to_dequeue = \
+                number_of_create_child_processes * 2
 
-            dequeued_create_jobs = self.get_dequeued_create_jobs(
-                maximum_number_of_create_jobs_to_dequeue
-            )
+            batch_count = 0
+            total_records_processed = 0
 
-            created_records_from_multiple_jobs = \
-                pool_tasks.run_create_jobs(
-                    dequeued_create_jobs,
-                    number_of_create_child_processes,
-                    object_factory
+            while not self.terminate_dequeued:
+                # Time the queue polling/waiting phase
+                metrics_collector.record_start('creator_queue_wait')
+                self.sleep_while_create_job_queue_empty()
+                metrics_collector.record_end('creator_queue_wait')
+
+                # Time the job dequeuing phase  
+                metrics_collector.record_start('creator_job_dequeue')
+                dequeued_create_jobs = self.get_dequeued_create_jobs(
+                    maximum_number_of_create_jobs_to_dequeue
                 )
+                metrics_collector.record_end('creator_job_dequeue')
 
-            self.created_record_queue.put(created_records_from_multiple_jobs)
+                if dequeued_create_jobs:  # Only process if we have jobs
+                    batch_count += 1
+                    
+                    # Calculate batch size for throughput metrics
+                    batch_record_count = sum(
+                        job.get('quantity_to_create', 0) 
+                        for job in dequeued_create_jobs 
+                        if isinstance(job, dict)
+                    )
+                    
+                    # Time the record creation processing phase
+                    metrics_collector.record_start('creator_record_creation')
+                    batch_start_time = time.perf_counter()
+                    
+                    created_records_from_multiple_jobs = \
+                        pool_tasks.run_create_jobs(
+                            dequeued_create_jobs,
+                            number_of_create_child_processes,
+                            object_factory
+                        )
+                    
+                    batch_end_time = time.perf_counter()
+                    batch_duration = batch_end_time - batch_start_time
+                    metrics_collector.record_end('creator_record_creation')
+                    
+                    # Calculate actual record count from created records
+                    actual_record_count = len(created_records_from_multiple_jobs) if created_records_from_multiple_jobs else 0
+                    total_records_processed += actual_record_count
+                    
+                    # Record throughput metrics for this batch
+                    if batch_duration > 0:
+                        metrics_collector.record_throughput(actual_record_count, batch_duration)
+                    
+                    # Time the queue put operation
+                    metrics_collector.record_start('creator_queue_put')
+                    self.created_record_queue.put(created_records_from_multiple_jobs)
+                    metrics_collector.record_end('creator_queue_put')
 
-        self.created_record_queue.put("terminate")
+            # Record final termination queue put
+            metrics_collector.record_start('creator_termination_put')
+            self.created_record_queue.put("terminate")
+            metrics_collector.record_end('creator_termination_put')
+            
+            # Record final performance metrics for the creator component
+            metrics_collector.record_end('creator_parent_process_total')
+            
+            # Update performance metrics with final statistics
+            creator_metrics = {
+                'total_batches_processed': batch_count,
+                'total_records_created': total_records_processed,
+                'avg_records_per_batch': total_records_processed / batch_count if batch_count > 0 else 0,
+                'number_of_child_processes': number_of_create_child_processes
+            }
+            metrics_collector.update_performance_metrics('creators', creator_metrics)
 
     def sleep_while_create_job_queue_empty(self):
         """ Sleep until jobs are on the queue """
