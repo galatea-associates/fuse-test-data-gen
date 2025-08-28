@@ -1,12 +1,15 @@
 """
 Pydantic response models for FastAPI metrics endpoints.
 
-This module defines comprehensive type-safe data contracts for all metrics-related API responses
-in the FUSE Test Data Generator performance monitoring system. All models support automatic
-validation, JSON serialization, and OpenAPI documentation generation.
+This module defines comprehensive type-safe data contracts for all
+metrics-related API responses in the FUSE Test Data Generator performance
+monitoring system.
+All models support automatic validation, JSON serialization, and OpenAPI
+documentation generation.
 
-The response models implement a consistent envelope pattern with standardized success/error
-structures, timestamp metadata, and pagination support where applicable.
+The response models implement a consistent envelope pattern with standardized
+success/error structures, timestamp metadata, and pagination support where
+applicable.
 """
 
 from datetime import datetime
@@ -17,24 +20,27 @@ from pydantic import BaseModel, Field
 class ErrorResponse(BaseModel):
     """
     Standardized error response model for consistent API error handling.
-    
+
     Used across all endpoints to provide structured error information with
     appropriate error codes, human-readable messages, and debugging details.
     """
     error_code: str = Field(
         ...,
-        description="Standardized error code for programmatic handling (e.g., 'INVALID_RUN_ID', 'METRICS_NOT_FOUND')",
+        description=("Standardized error code for programmatic handling "
+                     "(e.g., 'INVALID_RUN_ID', 'METRICS_NOT_FOUND')"),
         example="INVALID_RUN_ID"
     )
     message: str = Field(
         ...,
-        description="Human-readable error message providing clear explanation of the issue",
+        description=("Human-readable error message providing clear "
+                     "explanation of the issue"),
         example="Run ID not found in metrics storage"
     )
     details: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional error context and debugging information",
-        example={"requested_run_id": "run_20240801_101530", "available_runs": 42}
+        example={"requested_run_id": "run_20240801_101530",
+                 "available_runs": 42}
     )
     timestamp: datetime = Field(
         default_factory=datetime.now,
@@ -52,9 +58,10 @@ class ErrorResponse(BaseModel):
 class BaseResponse(BaseModel):
     """
     Generic envelope model for consistent API response structure.
-    
-    Implements the standard envelope pattern used across all successful API responses
-    with status indicators, data payloads, error information, and timestamps.
+
+    Implements the standard envelope pattern used across all successful API
+    responses with status indicators, data payloads, error information, and
+    timestamps.
     """
     status: str = Field(
         default="success",
@@ -67,7 +74,8 @@ class BaseResponse(BaseModel):
     )
     error: Optional[str] = Field(
         default=None,
-        description="Error message for failed requests (null for successful responses)",
+        description=("Error message for failed requests "
+                     "(null for successful responses)"),
         example=None
     )
     timestamp: datetime = Field(
@@ -86,9 +94,10 @@ class BaseResponse(BaseModel):
 class PaginationMeta(BaseModel):
     """
     Pagination metadata model for paginated API responses.
-    
+
     Provides comprehensive pagination information including current page,
-    total counts, and navigation indicators for client-side pagination controls.
+    total counts, and navigation indicators for client-side pagination
+    controls.
     """
     page: int = Field(
         ...,
@@ -130,7 +139,7 @@ class PaginationMeta(BaseModel):
 class RunSummary(BaseModel):
     """
     Model for individual run summary information.
-    
+
     Contains high-level metadata and key performance indicators for a single
     data generation run, used in run listing endpoints and summary displays.
     """
@@ -187,9 +196,9 @@ class RunSummary(BaseModel):
 class RunDetailMetrics(BaseModel):
     """
     Detailed metrics model with stage-level performance breakdowns.
-    
-    Provides comprehensive performance data including timing for each pipeline stage,
-    throughput metrics, resource utilization, and error statistics.
+
+    Provides comprehensive performance data including timing for each pipeline
+    stage, throughput metrics, resource utilization, and error statistics.
     """
     stage_timings: Dict[str, float] = Field(
         ...,
@@ -245,9 +254,9 @@ class RunDetailMetrics(BaseModel):
 class RunListResponse(BaseModel):
     """
     Response model for the /api/runs endpoint providing paginated run listings.
-    
-    Contains a list of run summaries with pagination metadata and aggregate statistics
-    for efficient browsing of historical data generation runs.
+
+    Contains a list of run summaries with pagination metadata and aggregate
+    statistics for efficient browsing of historical data generation runs.
     """
     runs: List[RunSummary] = Field(
         ...,
@@ -278,7 +287,7 @@ class RunListResponse(BaseModel):
 class RunDetailResponse(BaseModel):
     """
     Response model for the /api/runs/{run_id} endpoint providing complete run details.
-    
+
     Contains comprehensive metrics, configuration, execution context, and file outputs
     for a specific data generation run.
     """
@@ -329,7 +338,7 @@ class RunDetailResponse(BaseModel):
 class ComparisonMetrics(BaseModel):
     """
     Model for side-by-side metrics comparison between runs.
-    
+
     Provides performance data for individual runs along with delta analysis
     and relative performance rankings for comparative analysis.
     """
@@ -365,7 +374,7 @@ class ComparisonMetrics(BaseModel):
 class CompareRunsResponse(BaseModel):
     """
     Response model for the /api/runs/compare endpoint providing multi-run analysis.
-    
+
     Contains comparison data for multiple runs with differential analysis,
     performance rankings, and optimization recommendations.
     """
@@ -407,7 +416,7 @@ class CompareRunsResponse(BaseModel):
 class LatestMetricsResponse(BaseModel):
     """
     Response model for the /api/metrics/latest endpoint providing real-time data.
-    
+
     Contains current run information, latest completed run metrics, active status,
     and real-time performance indicators for live monitoring.
     """
@@ -430,6 +439,7 @@ class LatestMetricsResponse(BaseModel):
         description="Whether a data generation run is currently executing",
         example=True
     )
+
     real_time_metrics: Dict[str, Any] = Field(
         ...,
         description="Live performance metrics for the active run or system status",
