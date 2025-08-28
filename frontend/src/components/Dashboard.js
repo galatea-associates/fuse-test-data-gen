@@ -20,7 +20,7 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -89,13 +89,16 @@ const Dashboard = () => {
     };
 
     setErrors(prev => ({ ...prev, [operation]: errorMessage }));
-    console.error(`[Dashboard] ${operation} error:`, error);
+    // Development-only error logging
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[Dashboard] ${operation} error:`, error); // eslint-disable-line no-console
+    }
   };
 
   /**
    * Fetch latest metrics data with error handling
    */
-  const fetchLatestMetrics = async () => {
+  const fetchLatestMetrics = useCallback(async () => {
     try {
       setSpecificLoading('metrics', true);
       clearError('metrics');
@@ -116,12 +119,12 @@ const Dashboard = () => {
     } finally {
       setSpecificLoading('metrics', false);
     }
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Fetch historical runs list
    */
-  const fetchRunsList = async () => {
+  const fetchRunsList = useCallback(async () => {
     try {
       setSpecificLoading('runs', true);
       clearError('runs');
@@ -139,12 +142,12 @@ const Dashboard = () => {
     } finally {
       setSpecificLoading('runs', false);
     }
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Fetch detailed metrics for selected run
    */
-  const fetchRunDetails = async (runId) => {
+  const fetchRunDetails = useCallback(async (runId) => {
     if (!runId) return;
 
     try {
@@ -162,7 +165,7 @@ const Dashboard = () => {
     } finally {
       setSpecificLoading('details', false);
     }
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Generate chart data for time-series visualization
@@ -178,8 +181,7 @@ const Dashboard = () => {
       clearError('charts');
 
       // Create time-series data from performance metrics
-      const chartPoints = [];
-      const { timing, performance, stages } = details.metrics;
+      const { timing, performance } = details.metrics;
 
       // Generate data points based on stage completion times
       const stageData = [
@@ -281,18 +283,7 @@ const Dashboard = () => {
     return `${remainingSeconds}s`;
   };
 
-  /**
-   * Format memory usage in human-readable format
-   */
-  const formatMemory = (bytes) => {
-    if (!bytes) return '0 MB';
-    
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(1)} GB`;
-    }
-    return `${Math.round(mb)} MB`;
-  };
+
 
   /**
    * Setup polling for real-time updates
@@ -315,14 +306,14 @@ const Dashboard = () => {
         clearTimeout(pollingTimer);
       }
     };
-  }, [refreshInterval, isPollingActive]);
+  }, [refreshInterval, isPollingActive, fetchLatestMetrics]);
 
   /**
    * Initial data fetching
    */
   useEffect(() => {
     fetchRunsList();
-  }, []);
+  }, [fetchRunsList]);
 
   /**
    * Fetch run details when selection changes
@@ -331,7 +322,7 @@ const Dashboard = () => {
     if (selectedRunId && selectedRunId !== 'latest') {
       fetchRunDetails(selectedRunId);
     }
-  }, [selectedRunId]);
+  }, [selectedRunId, fetchRunDetails]);
 
   /**
    * Cleanup on component unmount
