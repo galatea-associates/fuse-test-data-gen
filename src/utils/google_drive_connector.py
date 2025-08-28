@@ -53,7 +53,7 @@ class GoogleDriveConnector():
                and name='{0}' and trashed=false"""
 
         if parent_folder_id is not None:
-            q +=  " and parents in '{0}'".format(parent_folder_id)
+            q += " and parents in '{0}'".format(parent_folder_id)
 
         folders = self.service.files()\
                       .list(q=q.format(folder_name),
@@ -67,7 +67,7 @@ class GoogleDriveConnector():
         q = "name='{0}' and trashed=false"
 
         if parent_folder_id is not None:
-            q +=  " and parents in '{0}'".format(parent_folder_id)
+            q += " and parents in '{0}'".format(parent_folder_id)
 
         files = self.service.files()\
                     .list(q=q.format(file_name),
