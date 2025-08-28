@@ -12,6 +12,27 @@
 import axios from 'axios';
 
 /**
+ * Development-only logging utility to avoid console warnings in production
+ */
+const devLog = {
+    log: (...args) => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log(...args); // eslint-disable-line no-console
+        }
+    },
+    error: (...args) => {
+        if (process.env.NODE_ENV === 'development') {
+            console.error(...args); // eslint-disable-line no-console
+        }
+    },
+    warn: (...args) => {
+        if (process.env.NODE_ENV === 'development') {
+            console.warn(...args); // eslint-disable-line no-console
+        }
+    }
+};
+
+/**
  * API Configuration Constants
  */
 const API_CONFIG = {
@@ -105,7 +126,7 @@ class APIClient {
         this.axiosInstance.interceptors.request.use(
             (config) => {
                 // Add request logging
-                console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
+                devLog.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
                     params: config.params,
                     data: config.data,
                 });
@@ -115,7 +136,7 @@ class APIClient {
                 return config;
             },
             (error) => {
-                console.error('[API] Request interceptor error:', error);
+                devLog.error('[API] Request interceptor error:', error);
                 return Promise.reject(error);
             }
         );
@@ -125,7 +146,7 @@ class APIClient {
             (response) => {
                 // Log response time
                 const duration = Date.now() - response.config.metadata.startTime;
-                console.log(`[API] Response ${response.status} in ${duration}ms`);
+                devLog.log(`[API] Response ${response.status} in ${duration}ms`);
 
                 // Validate response envelope
                 if (response.data && response.data.status === 'success') {
@@ -141,7 +162,7 @@ class APIClient {
                 const duration = error.config?.metadata ? 
                     Date.now() - error.config.metadata.startTime : 0;
                 
-                console.error(`[API] Error response in ${duration}ms:`, {
+                devLog.error(`[API] Error response in ${duration}ms:`, {
                     message: error.message,
                     status: error.response?.status,
                     data: error.response?.data,
@@ -211,7 +232,7 @@ class APIClient {
 
                 // Exponential backoff with jitter
                 const backoffDelay = delay * Math.pow(2, attempt) + Math.random() * 1000;
-                console.log(`[API] Retry attempt ${attempt + 1}/${maxRetries + 1} in ${Math.round(backoffDelay)}ms`);
+                devLog.log(`[API] Retry attempt ${attempt + 1}/${maxRetries + 1} in ${Math.round(backoffDelay)}ms`);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
@@ -281,7 +302,7 @@ class APIClient {
         // Check cache first
         const cachedData = this.cache.get(cacheKey);
         if (cachedData) {
-            console.log('[API] Returning cached runs list');
+            devLog.log('[API] Returning cached runs list');
             return cachedData;
         }
 
@@ -340,7 +361,7 @@ class APIClient {
         // Check cache first
         const cachedData = this.cache.get(cacheKey);
         if (cachedData) {
-            console.log(`[API] Returning cached run details for ${runId}`);
+            devLog.log(`[API] Returning cached run details for ${runId}`);
             return cachedData;
         }
 
@@ -421,7 +442,7 @@ class APIClient {
         // Check cache first
         const cachedData = this.cache.get(cacheKey);
         if (cachedData) {
-            console.log(`[API] Returning cached comparison for runs: ${runIds.join(', ')}`);
+            devLog.log(`[API] Returning cached comparison for runs: ${runIds.join(', ')}`);
             return cachedData;
         }
 
@@ -557,7 +578,7 @@ class APIClient {
             cancelSource.cancel(`Request ${requestKey} cancelled by user`);
             this.cancelTokens.delete(requestKey);
             this.setLoadingState(requestKey, false);
-            console.log(`[API] Cancelled request: ${requestKey}`);
+            devLog.log(`[API] Cancelled request: ${requestKey}`);
             return true;
         }
         return false;
@@ -577,7 +598,7 @@ class APIClient {
         });
 
         this.cancelTokens.clear();
-        console.log(`[API] Cancelled ${cancelledCount} active requests`);
+        devLog.log(`[API] Cancelled ${cancelledCount} active requests`);
         return cancelledCount;
     }
 
@@ -596,11 +617,11 @@ class APIClient {
             });
 
             keysToDelete.forEach(key => this.cache.delete(key));
-            console.log(`[API] Cleared ${keysToDelete.length} cache entries matching pattern: ${pattern}`);
+            devLog.log(`[API] Cleared ${keysToDelete.length} cache entries matching pattern: ${pattern}`);
         } else {
             // Clear all cache
             this.cache.clear();
-            console.log('[API] Cleared all cache entries');
+            devLog.log('[API] Cleared all cache entries');
         }
     }
 
