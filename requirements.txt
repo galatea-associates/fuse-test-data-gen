@@ -46,6 +46,8 @@ dicttoxml==1.7.16
     # via -r requirements.in
 dill==0.3.9
     # via pylint
+fastapi>=0.104.0
+    # via -r requirements.in
 fsspec==2025.2.0
     # via dask
 google-api-core==2.24.1
@@ -154,6 +156,8 @@ protobuf==5.29.3
     #   proto-plus
 py==1.11.0
     # via -r requirements.in
+pydantic>=2.4.0
+    # via -r requirements.in
 pyasn1==0.6.1
     # via
     #   -r requirements.in
@@ -231,6 +235,8 @@ uritemplate==4.1.1
     # via
     #   -r requirements.in
     #   google-api-python-client
+uvicorn>=0.24.0
+    # via -r requirements.in
 urllib3==2.3.0
     # via
     #   -r requirements.in
