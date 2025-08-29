@@ -2,6 +2,7 @@ import abc
 import os
 from datetime import datetime, timezone
 
+
 class FileBuilder(abc.ABC):
     """ A base class for all file builders. Contains utility functions for
     uploading to google drive, opening and closing files, and various others

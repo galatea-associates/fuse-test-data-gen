@@ -117,7 +117,8 @@ class CashFlowFactory(Creatable):
 
     @staticmethod
     def __create_payment_date():
-        """ Return the payment date, which currently will always be the current date
+        """ Return the payment date, which currently will always be the
+        current date
         Returns
         -------
         Date

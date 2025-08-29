@@ -49,7 +49,7 @@ class SwapPositionFactory(Creatable):
                                         record_count, start_id)
 
         records = [self.create_record(swap_contract, instrument,
-                                        position_type, date)
+                                      position_type, date)
                    for swap_contract in swap_contract_batch
                    for instrument in self.get_random_instruments()
                    for position_type in self.POSITION_TYPES

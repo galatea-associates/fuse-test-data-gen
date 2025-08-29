@@ -47,6 +47,7 @@ from configuration.configuration import Configuration
 import validator.config_validator as config_validator
 from utils.google_drive_connector import GoogleDriveConnector
 from datetime import datetime, timezone
+from metrics.metrics_collector import MetricsCollector
 
 
 def main():
@@ -94,12 +95,35 @@ def process_object_factory(file_builder, object_factory):
         Contains creation parameters and multiprocessing shared arguments.
     """
 
-    coordinator = Coordinator(file_builder, object_factory)
+    # Initialize metrics collector for performance monitoring
+    metrics_collector = MetricsCollector()
+    
+    # Get domain object name for metrics tracking
+    domain_object_name = type(object_factory).__name__.replace('Factory', '').lower()
+    
+    # Start timing the overall pipeline execution for this domain object
+    pipeline_stage = f"{domain_object_name}_pipeline"
+    metrics_collector.record_start(pipeline_stage)
 
+    # Create Coordinator with metrics recorder for performance tracking
+    coordinator = Coordinator(file_builder, object_factory, metrics_recorder=metrics_collector)
+
+    # Execute the multiprocessing pipeline
     coordinator.start_create_parent_process()
     coordinator.start_write_parent_process()
     coordinator.populate_create_job_queue()
     coordinator.join_parent_processes()
+    
+    # End timing for pipeline execution
+    metrics_collector.record_end(pipeline_stage)
+    
+    # Flush metrics to persistent storage
+    current_metrics = metrics_collector.get_current_metrics()
+    run_id = current_metrics.get('run_id', datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    metrics_collector.flush(run_id)
+    
+    # Display performance summary to console
+    print_performance_summary(current_metrics, domain_object_name)
 
 
 def instantiate_file_builder(factory_definition,
@@ -410,6 +434,104 @@ def validate_configs(configurations):
         for error in validation_result.get_errors():
             print(error)
         sys.exit()
+
+
+def print_performance_summary(metrics_data, domain_object_name):
+    """
+    Display performance metrics summary to console after pipeline completion.
+    
+    Shows key timing information, throughput statistics, and resource utilization
+    for the completed data generation pipeline run, providing immediate feedback
+    on generation performance.
+    
+    Parameters
+    ----------
+    metrics_data : dict
+        Complete metrics data structure from MetricsCollector
+    domain_object_name : str
+        Name of the domain object that was processed
+    """
+    
+    print(f"\n{'=' * 60}")
+    print(f"PERFORMANCE SUMMARY - {domain_object_name.upper()}")
+    print(f"{'=' * 60}")
+    
+    # Display run identification
+    run_id = metrics_data.get('run_id', 'Unknown')
+    print(f"Run ID: {run_id}")
+    
+    # Display timing information
+    total_duration = metrics_data.get('total_duration_seconds')
+    if total_duration is not None:
+        print(f"Total Duration: {total_duration:.2f} seconds")
+        print(f"Start Time: {metrics_data.get('start_time', 'Unknown')}")
+        print(f"End Time: {metrics_data.get('end_time', 'Unknown')}")
+    
+    # Display stage timings if available
+    stage_timings = metrics_data.get('stage_timings', {})
+    if stage_timings:
+        print(f"\nStage Timings:")
+        for stage_name, stage_data in stage_timings.items():
+            duration = stage_data.get('duration_seconds', 0)
+            print(f"  {stage_name}: {duration:.2f} seconds")
+    
+    # Display throughput metrics if available
+    throughput_data = metrics_data.get('performance', {}).get('throughput', {})
+    if throughput_data:
+        print(f"\nThroughput Metrics:")
+        total_records = throughput_data.get('total_records_processed', 0)
+        current_rate = throughput_data.get('current_records_per_second', 0)
+        peak_rate = throughput_data.get('peak_records_per_second', 0)
+        
+        print(f"  Total Records Processed: {total_records:,}")
+        if current_rate > 0:
+            print(f"  Average Rate: {current_rate:.0f} records/second")
+        if peak_rate > 0:
+            print(f"  Peak Rate: {peak_rate:.0f} records/second")
+    
+    # Display resource utilization if available
+    resource_util = metrics_data.get('resource_utilization', {})
+    if resource_util:
+        print(f"\nResource Utilization:")
+        peak_memory = resource_util.get('peak_memory_mb')
+        avg_cpu = resource_util.get('avg_cpu_percent')
+        process_count = resource_util.get('process_count')
+        
+        if peak_memory is not None:
+            print(f"  Peak Memory Usage: {peak_memory:.1f} MB")
+        if avg_cpu is not None:
+            print(f"  Average CPU Usage: {avg_cpu:.1f}%")
+        if process_count is not None:
+            print(f"  Process Count: {process_count}")
+    
+    # Display configuration information if available
+    config_data = metrics_data.get('configuration', {})
+    if config_data:
+        record_counts = config_data.get('record_counts', {})
+        if record_counts:
+            print(f"\nGeneration Configuration:")
+            for factory_name, count in record_counts.items():
+                print(f"  {factory_name}: {count:,} records")
+    
+    # Display error summary if there were any issues
+    error_summary = metrics_data.get('error_summary', {})
+    total_errors = error_summary.get('total_errors', 0)
+    warnings = error_summary.get('warnings', 0)
+    
+    if total_errors > 0 or warnings > 0:
+        print(f"\nIssues Summary:")
+        if total_errors > 0:
+            print(f"  Errors: {total_errors}")
+        if warnings > 0:
+            print(f"  Warnings: {warnings}")
+        
+        last_error = error_summary.get('last_error')
+        if last_error:
+            print(f"  Last Issue: {last_error}")
+    
+    print(f"{'=' * 60}")
+    print(f"Metrics saved to: metrics/runs/{run_id}.json")
+    print(f"{'=' * 60}\n")
 
 
 def delete_database():

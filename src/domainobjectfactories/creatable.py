@@ -206,12 +206,12 @@ class Creatable(ABC):
                 data_method = self.create_random_integer
 
             for _ in range(field_count):
-                yield f'{object_name}_field{field_number}',\
+                yield f'{object_name}_field{field_number}', \
                       data_method(length=data_length)
                 field_number += 1
 
     def create_random_string(self, length,
-                               include_letters=True, include_numbers=True):
+                             include_letters=True, include_numbers=True):
         """ Creates a random string, of letters or numbers or both.
 
         Parameters
@@ -279,7 +279,7 @@ class Creatable(ABC):
         )
 
     def create_random_integer(self, min=1, max=10000,
-                                length=None, negative=False):
+                              length=None, negative=False):
         """ Create a random integer of a given length. If no length given,
         create a random integer between minimum and maximum.
 
@@ -443,7 +443,7 @@ class Creatable(ABC):
         return datetime.now(timezone.utc).date()
 
     def create_effective_date(self, n_days_to_add=3,
-                                knowledge_date=None, position_type=None):
+                              knowledge_date=None, position_type=None):
         """ Creates an Effective Date value
 
         Parameters

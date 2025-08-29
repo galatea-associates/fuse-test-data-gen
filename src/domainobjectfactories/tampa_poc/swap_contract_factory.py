@@ -103,7 +103,7 @@ class SwapContractFactory(Creatable):
         return random.randint(swap_min, swap_max)
 
     def create_swap_end_date(self, years_to_add=5,
-                               start_date=None, status=None):
+                             start_date=None, status=None):
         """ Create the end date of the swap
 
         Parameters

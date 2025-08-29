@@ -2,6 +2,7 @@ from filebuilders.file_builder import FileBuilder
 import ujson
 import os
 
+
 class JSONLBuilder(FileBuilder):
     """ A class to generate a JSONL file from records. JSONL is JSON but each
     object appears on a new and single line. The ujson library used to format
